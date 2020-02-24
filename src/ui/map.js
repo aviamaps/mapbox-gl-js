@@ -1580,7 +1580,7 @@ class Map extends Camera {
     /**
      * Check whether or not an image with a specific ID exists in the style. This checks both images
      * in the style's original [sprite](https://docs.mapbox.com/help/glossary/sprite/) and any images
-     * that have been added at runtime using {@link addImage}.
+     * that have been added at runtime using {@link Map#addImage}.
      *
      * @param id The ID of the image.
      *
@@ -1602,7 +1602,7 @@ class Map extends Camera {
     /**
      * Remove an image from a style. This can be an image from the style's original
      * [sprite](https://docs.mapbox.com/help/glossary/sprite/) or any images
-     * that have been added at runtime using {@link addImage}.
+     * that have been added at runtime using {@link Map#addImage}.
      *
      * @param id The ID of the image.
      *
@@ -1616,7 +1616,7 @@ class Map extends Camera {
     }
 
     /**
-     * Load an image from an external URL to be used with `Map#addImage`. External
+     * Load an image from an external URL to be used with {@link Map#addImage}. External
      * domains must support [CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Access_control_CORS).
      *
      * @param {string} url The URL of the image file. Image file must be in png, webp, or jpg format.
@@ -1639,7 +1639,7 @@ class Map extends Camera {
     /**
     * Returns an Array of strings containing the IDs of all images currently available in the map.
     * This includes both images from the style's original [sprite](https://docs.mapbox.com/help/glossary/sprite/)
-    * and any images that have been added at runtime using {@link addImage}.
+    * and any images that have been added at runtime using {@link Map#addImage}.
     *
     * @returns {Array<string>} An Array of strings containing the names of all sprites/images currently available in the map.
     *
@@ -1901,6 +1901,7 @@ class Map extends Camera {
      * feature ids, set the `generateId` option in the `GeoJSONSourceSpecification` to auto-assign them. This
      * option assigns ids based on a feature's index in the source data. If you change feature data using
      * `map.getSource('some id').setData(..)`, you may need to re-apply state taking into account updated `id` values.
+     * @see [Create a hover effect](https://docs.mapbox.com/mapbox-gl-js/example/hover-styles/)
      */
     setFeatureState(feature: { source: string; sourceLayer?: string; id: string | number; }, state: Object) {
         this.style.setFeatureState(feature, state);
