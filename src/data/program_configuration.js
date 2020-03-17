@@ -18,6 +18,7 @@ import {
     type UniformLocations
 } from '../render/uniform_binding';
 
+import type {CanonicalTileID} from '../source/tile_id';
 import type Context from '../gl/context';
 import type {TypedStyleLayer} from '../style/style_layer/typed_style_layer';
 import type {CrossfadeParameters} from '../style/evaluation_parameters';
@@ -77,7 +78,7 @@ function packColor(color: Color): [number, number] {
  */
 
 interface AttributeBinder {
-    populatePaintArray(length: number, feature: Feature, imagePositions: {[_: string]: ImagePosition}, formattedSection?: FormattedSection): void;
+    populatePaintArray(length: number, feature: Feature, imagePositions: {[_: string]: ImagePosition}, canonical?: CanonicalTileID, formattedSection?: FormattedSection): void;
     updatePaintArray(start: number, length: number, feature: Feature, featureState: FeatureState, imagePositions: {[_: string]: ImagePosition}): void;
     upload(Context): void;
     destroy(): void;
@@ -86,7 +87,7 @@ interface AttributeBinder {
 interface UniformBinder {
     uniformNames: Array<string>;
     setUniform(uniform: Uniform<*>, globals: GlobalProperties, currentValue: PossiblyEvaluatedPropertyValue<*>, uniformName: string): void;
-    getBinding(context: Context, location: WebGLUniformLocation): $Shape<Uniform<*>>;
+    getBinding(context: Context, location: WebGLUniformLocation, name: string): $Shape<Uniform<*>>;
 }
 
 class ConstantBinder implements UniformBinder {
@@ -104,7 +105,7 @@ class ConstantBinder implements UniformBinder {
         uniform.set(currentValue.constantOr(this.value));
     }
 
-    getBinding(context: Context, location: WebGLUniformLocation): $Shape<Uniform<any>> {
+    getBinding(context: Context, location: WebGLUniformLocation, _: string): $Shape<Uniform<any>> {
         return (this.type === 'color') ?
             new UniformColor(context, location) :
             new Uniform1f(context, location);
@@ -115,27 +116,37 @@ class CrossFadedConstantBinder implements UniformBinder {
     uniformNames: Array<string>;
     patternFrom: ?Array<number>;
     patternTo: ?Array<number>;
+    pixelRatioFrom: number;
+    pixelRatioTo: number;
 
     constructor(value: mixed, names: Array<string>) {
         this.uniformNames = names.map(name => `u_${name}`);
         this.patternFrom = null;
         this.patternTo = null;
+        this.pixelRatioFrom = 1.0;
+        this.pixelRatioTo = 1.0;
     }
 
     setConstantPatternPositions(posTo: ImagePosition, posFrom: ImagePosition) {
-        this.patternTo = posTo.tlbr;
+        this.pixelRatioFrom = posFrom.pixelRatio;
+        this.pixelRatioTo = posTo.pixelRatio;
         this.patternFrom = posFrom.tlbr;
+        this.patternTo = posTo.tlbr;
     }
 
     setUniform(uniform: Uniform<*>, globals: GlobalProperties, currentValue: PossiblyEvaluatedPropertyValue<mixed>, uniformName: string) {
         const pos =
             uniformName === 'u_pattern_to' ? this.patternTo :
-            uniformName === 'u_pattern_from' ? this.patternFrom : null;
+            uniformName === 'u_pattern_from' ? this.patternFrom :
+            uniformName === 'u_pixel_ratio_to' ? this.pixelRatioTo :
+            uniformName === 'u_pixel_ratio_from' ? this.pixelRatioFrom : null;
         if (pos) uniform.set(pos);
     }
 
-    getBinding(context: Context, location: WebGLUniformLocation): $Shape<Uniform<any>> {
-        return new Uniform4f(context, location);
+    getBinding(context: Context, location: WebGLUniformLocation, name: string): $Shape<Uniform<any>> {
+        return name.substr(0, 9) === 'u_pattern' ?
+            new Uniform4f(context, location) :
+            new Uniform1f(context, location);
     }
 }
 
@@ -161,9 +172,9 @@ class SourceExpressionBinder implements AttributeBinder {
         this.paintVertexArray = new PaintVertexArray();
     }
 
-    populatePaintArray(newLength: number, feature: Feature, imagePositions: {[_: string]: ImagePosition}, formattedSection?: FormattedSection) {
+    populatePaintArray(newLength: number, feature: Feature, imagePositions: {[_: string]: ImagePosition}, canonical?: CanonicalTileID, formattedSection?: FormattedSection) {
         const start = this.paintVertexArray.length;
-        const value = this.expression.evaluate(new EvaluationParameters(0), feature, {}, [], formattedSection);
+        const value = this.expression.evaluate(new EvaluationParameters(0), feature, {}, canonical, [], formattedSection);
         this.paintVertexArray.resize(newLength);
         this._setPaintValue(start, newLength, value);
     }
@@ -232,9 +243,9 @@ class CompositeExpressionBinder implements AttributeBinder, UniformBinder {
         this.paintVertexArray = new PaintVertexArray();
     }
 
-    populatePaintArray(newLength: number, feature: Feature, imagePositions: {[_: string]: ImagePosition}, formattedSection?: FormattedSection) {
-        const min = this.expression.evaluate(new EvaluationParameters(this.zoom), feature, {}, [], formattedSection);
-        const max = this.expression.evaluate(new EvaluationParameters(this.zoom + 1), feature, {}, [], formattedSection);
+    populatePaintArray(newLength: number, feature: Feature, imagePositions: {[_: string]: ImagePosition}, canonical?: CanonicalTileID, formattedSection?: FormattedSection) {
+        const min = this.expression.evaluate(new EvaluationParameters(this.zoom), feature, {}, canonical, [], formattedSection);
+        const max = this.expression.evaluate(new EvaluationParameters(this.zoom + 1), feature, {}, canonical, [], formattedSection);
         const start = this.paintVertexArray.length;
         this.paintVertexArray.resize(newLength);
         this._setPaintValue(start, newLength, min, max);
@@ -283,7 +294,7 @@ class CompositeExpressionBinder implements AttributeBinder, UniformBinder {
         uniform.set(factor);
     }
 
-    getBinding(context: Context, location: WebGLUniformLocation): Uniform1f {
+    getBinding(context: Context, location: WebGLUniformLocation, _: string): Uniform1f {
         return new Uniform1f(context, location);
     }
 }
@@ -345,11 +356,15 @@ class CrossFadedCompositeBinder implements AttributeBinder {
         for (let i = start; i < end; i++) {
             this.zoomInPaintVertexArray.emplace(i,
                 imageMid.tl[0], imageMid.tl[1], imageMid.br[0], imageMid.br[1],
-                imageMin.tl[0], imageMin.tl[1], imageMin.br[0], imageMin.br[1]
+                imageMin.tl[0], imageMin.tl[1], imageMin.br[0], imageMin.br[1],
+                imageMid.pixelRatio,
+                imageMin.pixelRatio,
             );
             this.zoomOutPaintVertexArray.emplace(i,
                 imageMid.tl[0], imageMid.tl[1], imageMid.br[0], imageMid.br[1],
-                imageMax.tl[0], imageMax.tl[1], imageMax.br[0], imageMax.br[1]
+                imageMax.tl[0], imageMax.tl[1], imageMax.br[0], imageMax.br[1],
+                imageMid.pixelRatio,
+                imageMax.pixelRatio,
             );
         }
     }
@@ -442,11 +457,11 @@ export default class ProgramConfiguration {
         return binder instanceof SourceExpressionBinder || binder instanceof CompositeExpressionBinder ? binder.maxValue : 0;
     }
 
-    populatePaintArrays(newLength: number, feature: Feature, imagePositions: {[_: string]: ImagePosition}, formattedSection?: FormattedSection) {
+    populatePaintArrays(newLength: number, feature: Feature, imagePositions: {[_: string]: ImagePosition}, canonical?: CanonicalTileID, formattedSection?: FormattedSection) {
         for (const property in this.binders) {
             const binder = this.binders[property];
             if (binder instanceof SourceExpressionBinder || binder instanceof CompositeExpressionBinder || binder instanceof CrossFadedCompositeBinder)
-                (binder: AttributeBinder).populatePaintArray(newLength, feature, imagePositions, formattedSection);
+                (binder: AttributeBinder).populatePaintArray(newLength, feature, imagePositions, canonical, formattedSection);
         }
     }
     setConstantPatternPositions(posTo: ImagePosition, posFrom: ImagePosition) {
@@ -503,7 +518,7 @@ export default class ProgramConfiguration {
             if (binder instanceof ConstantBinder || binder instanceof CrossFadedConstantBinder || binder instanceof CompositeExpressionBinder) {
                 for (const name of binder.uniformNames) {
                     if (locations[name]) {
-                        const binding = binder.getBinding(context, locations[name]);
+                        const binding = binder.getBinding(context, locations[name], name);
                         uniforms.push({name, property, binding});
                     }
                 }
@@ -569,9 +584,9 @@ export class ProgramConfigurationSet<Layer: TypedStyleLayer> {
         this._bufferOffset = 0;
     }
 
-    populatePaintArrays(length: number, feature: Feature, index: number, imagePositions: {[_: string]: ImagePosition}, formattedSection?: FormattedSection) {
+    populatePaintArrays(length: number, feature: Feature, index: number, imagePositions: {[_: string]: ImagePosition}, canonical: CanonicalTileID, formattedSection?: FormattedSection) {
         for (const key in this.programConfigurations) {
-            this.programConfigurations[key].populatePaintArrays(length, feature, imagePositions, formattedSection);
+            this.programConfigurations[key].populatePaintArrays(length, feature, imagePositions, canonical, formattedSection);
         }
 
         if (feature.id !== undefined) {
@@ -620,9 +635,9 @@ function paintAttributeNames(property, type) {
         'text-halo-width': ['halo_width'],
         'icon-halo-width': ['halo_width'],
         'line-gap-width': ['gapwidth'],
-        'line-pattern': ['pattern_to', 'pattern_from'],
-        'fill-pattern': ['pattern_to', 'pattern_from'],
-        'fill-extrusion-pattern': ['pattern_to', 'pattern_from'],
+        'line-pattern': ['pattern_to', 'pattern_from', 'pixel_ratio_to', 'pixel_ratio_from'],
+        'fill-pattern': ['pattern_to', 'pattern_from', 'pixel_ratio_to', 'pixel_ratio_from'],
+        'fill-extrusion-pattern': ['pattern_to', 'pattern_from', 'pixel_ratio_to', 'pixel_ratio_from'],
     };
 
     return attributeNameExceptions[property] || [property.replace(`${type}-`, '').replace(/-/g, '_')];
