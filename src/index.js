@@ -25,6 +25,7 @@ import {setRTLTextPlugin, getRTLTextPluginStatus} from './source/rtl_text_plugin
 import WorkerPool from './util/worker_pool';
 import {prewarm, clearPrewarmedResources} from './util/global_worker_pool';
 import {clearTileCache} from './util/tile_request_cache';
+import browser from './util/browser';
 import {PerformanceUtils} from './util/performance';
 
 const exported = {
@@ -80,6 +81,7 @@ const exported = {
      * mapboxgl.clearPrewarmedResources()
      */
     clearPrewarmedResources,
+    browser,
 
     /**
      * Gets and sets the map's [access token](https://www.mapbox.com/help/define-access-token/).
