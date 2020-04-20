@@ -106,7 +106,7 @@ DOM.suppressClick = function() {
 DOM.mousePos = function (el: HTMLElement, e: MouseEvent | window.TouchEvent | Touch) {
     const rect = el.getBoundingClientRect();
     return new Point(
-        (e.clientX - rect.left - el.clientLeft / (el._scaleRatio || 1),
+        (e.clientX - rect.left - el.clientLeft) / (el._scaleRatio || 1),
         (e.clientY - rect.top - el.clientTop) / (el._scaleRatio || 1)
     );
 };
