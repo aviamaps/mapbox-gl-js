@@ -1,7 +1,7 @@
 {
   "name": "mapbox-gl",
   "description": "A WebGL interactive maps library",
-  "version": "1.12.0-dev",
+  "version": "1.13.0-dev",
   "main": "dist/mapbox-gl.js",
   "style": "dist/mapbox-gl.css",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -67,7 +67,7 @@
     "eslint-plugin-react": "^7.12.4",
     "esm": "~3.0.84",
     "flow-bin": "^0.100.0",
-    "gl": "~4.3.3",
+    "gl": "^4.5.3",
     "glob": "^7.1.4",
     "is-builtin-module": "^3.0.0",
     "jsdom": "^13.0.0",
