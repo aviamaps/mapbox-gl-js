@@ -308,6 +308,7 @@ class Map extends Camera {
     _requestManager: RequestManager;
     _locale: Object;
     _removed: boolean;
+    _clickTolerance: number;
 
     /**
      * The map's {@link ScrollZoomHandler}, which implements zooming in and out with a scroll wheel or trackpad.
@@ -398,6 +399,7 @@ class Map extends Camera {
         this._controls = [];
         this._mapId = uniqueId();
         this._locale = extend({}, defaultLocale, options.locale);
+        this._clickTolerance = options.clickTolerance;
 
         this._requestManager = new RequestManager(options.transformRequest, options.accessToken);
 
@@ -505,11 +507,12 @@ class Map extends Camera {
      * @see [Display map navigation controls](https://www.mapbox.com/mapbox-gl-js/example/navigation/)
      */
     addControl(control: IControl, position?: ControlPosition) {
-        if (position === undefined && control.getDefaultPosition) {
-            position = control.getDefaultPosition();
-        }
         if (position === undefined) {
-            position = 'top-right';
+            if (control.getDefaultPosition) {
+                position = control.getDefaultPosition();
+            } else {
+                position = 'top-right';
+            }
         }
         if (!control || !control.onAdd) {
             return this.fire(new ErrorEvent(new Error(
